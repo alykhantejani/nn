@@ -51,19 +51,9 @@ local function makeContiguous(self, input, gradOutput)
    return input, gradOutput
 end
 
-function SpatialUpSamplingBilinear:updateOutput(input)
-   assert(input:dim() == 4 or input:dim()==3,
-            'SpatialUpSamplingBilinear only supports 3D or 4D tensors' )
-   local inputwas3D = false
-   if input:dim() == 3 then
-      input=input:view(-1, input:size(1), input:size(2), input:size(3))
-      inputwas3D = true
-   end
-   input = makeContiguous(self, input)
-   assert(input:dim() == 4)
-   -- Copy the input size
+function SpatialUpSamplingBilinear:setSize(input)
    local xdim = input:dim()
-   local ydim = input:dim() - 1
+   local ydim = xdim - 1
    for i = 1, input:dim() do
       self.inputSize[i] = input:size(i)
       self.outputSize[i] = input:size(i)
@@ -77,11 +67,25 @@ function SpatialUpSamplingBilinear:updateOutput(input)
       self.outputSize[ydim] = self.oheight
       self.outputSize[xdim] = self.owidth
    end
-   -- Resize the output if needed
-   self.output:resize(self.outputSize)
+end
+
+function SpatialUpSamplingBilinear:updateOutput(input)
+   assert(input:dim() == 4 or input:dim()==3,
+            'SpatialUpSamplingBilinear only supports 3D or 4D tensors' )
+   local inputwas3D = false
+   if input:dim() == 3 then
+      input=input:view(-1, input:size(1), input:size(2), input:size(3))
+      inputwas3D = true
+   end
+   input = makeContiguous(self, input)
+   local xdim = input:dim()
+   local ydim = xdim - 1
+   self:setSize(input)
    input.THNN.SpatialUpSamplingBilinear_updateOutput(
       input:cdata(),
-      self.output:cdata()
+      self.output:cdata(),
+      self.outputSize[ydim],
+      self.outputSize[xdim]
    )
    if inputwas3D then
       input = input:squeeze(1)
@@ -97,16 +101,22 @@ function SpatialUpSamplingBilinear:updateGradInput(input, gradOutput)
             'Input and gradOutput should be of same dimension' )
    local inputwas3D = false
    if input:dim() == 3 then
-      input=input:view(-1, input:size(1), input:size(2), input:size(3))
-      gradOutput=gradOutput:view(-1, gradOutput:size(1), gradOutput:size(2),
-                                 gradOutput:size(3))
+      input = input:view(-1, input:size(1), input:size(2), input:size(3))
+      gradOutput = gradOutput:view(-1, gradOutput:size(1), gradOutput:size(2),
+				   gradOutput:size(3))
       inputwas3D = true
    end
-   assert(input:dim() == 4 and gradOutput:dim() == 4)
-   self.gradInput:resizeAs(input)
+   local xdim = input:dim()
+   local ydim = xdim - 1
    input.THNN.SpatialUpSamplingBilinear_updateGradInput(
       gradOutput:cdata(),
-      self.gradInput:cdata()
+      self.gradInput:cdata(),
+      input:size(1),
+      input:size(2),
+      input:size(3),
+      input:size(4),
+      self.outputSize[ydim],
+      self.outputSize[xdim]
    )
    if inputwas3D then
       input = input:squeeze(1)
