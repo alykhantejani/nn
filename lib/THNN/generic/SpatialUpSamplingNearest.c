@@ -9,6 +9,13 @@ void THNN_(SpatialUpSamplingNearest_updateOutput)(
     int scale_factor)
 {
   // TODO: check argument shapes  
+  // resize output
+  // check scale_factor
+  // check gradOutput size
+  // 
+  int outputHeight = inputHeight * scale_factor;
+  int outputWidth = inputWidth * scale_factor;
+
   int dW = scale_factor;
   int dH = scale_factor;
   int xDim = input->nDimension-2;
