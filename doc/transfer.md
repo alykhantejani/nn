@@ -465,6 +465,22 @@ gnuplot.grid(true)
 
 ![](image/rrelu.png)
 
+<a name="nn.CReLU"></a>
+## CReLU ##
+```
+f = nn.CReLU([inplace])
+```
+
+Applies the concatenated rectified linear unit (`CReLU`) function to the input Tensor, outputting a `Tensor` with twice as many channels.
+`CReLU` is defined as:
+
+```
+f(x) = concat(max(0, x), max(0, -x))
+```
+
+i.e. `CReLU` applies `ReLU` to the input, `x`, and the negated input, `-x`, and concatenates the output along the 1st dimension for 3-dimensional inputs, and the 2nd dimension for 4-dimensional inputs.
+
+For reference see [Understanding and Improving Convolutional Neural Networks via Concatenated Rectified Linear Units](https://arxiv.org/abs/1603.05201).
 
 <a name="nn.ELU"></a>
 ## ELU ##

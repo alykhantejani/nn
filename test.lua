@@ -562,6 +562,67 @@ function nntest.ReLU6()
    end
 end
 
+function nntest.CReLU()
+   function _verifyCReLU(featureMaps, concatenatedFeatureMaps)
+      local rectifiedFeatureMaps = nn.ReLU():forward(featureMaps)
+      local rectifiedNegFeatureMaps = nn.ReLU():forward(-featureMaps)
+
+      mytester:asserteq(concatenatedFeatureMaps:size(1), featureMaps:size(1) * 2,
+                      "CReLU should double the number of feature maps")
+
+      mytester:assert(concatenatedFeatureMaps[{{1,3}, {}, {}}]:equal(rectifiedFeatureMaps) or
+                    concatenatedFeatureMaps[{{4,6}, {}, {}}]:equal(rectifiedFeatureMaps),
+                    "Original (rectified) feature maps should be in the first 3 or second 3 of the concatenated feature maps.")
+
+      if concatenatedFeatureMaps[{{1,3}, {}, {}}]:equal(rectifiedFeatureMaps) then
+         mytester:assert(concatenatedFeatureMaps[{{4,6}, {}, {}}]:equal(rectifiedNegFeatureMaps),
+         "concatenated feature maps should be negative of the original ones.")
+      else
+         mytester:assert(concatenatedFeatureMaps[{{1,3}, {}, {}}]:equal(rectifiedNegFeatureMaps),
+         "concatenated feature maps should be negative of the original ones.")
+      end
+   end
+
+   local model = nn.Sequential()
+   model:add(nn.SpatialConvolution(1, 3, 3, 3, 1, 1, 1, 1))
+
+   local crelu = nn.CReLU()
+   --batched
+   local input = torch.Tensor(2, 1, 20, 20):uniform()
+   local featureMaps = model:forward(input)
+   local concatenatedFeatureMaps = crelu:forward(featureMaps)
+   for i = 1, input:size(1) do
+      _verifyCReLU(featureMaps[i], concatenatedFeatureMaps[i])
+   end
+
+   --non-batched
+   local input = torch.Tensor(1, 20, 20):uniform()
+   local featureMaps = model:forward(input)
+   local concatenatedFeatureMaps = crelu:forward(featureMaps)
+   _verifyCReLU(featureMaps, concatenatedFeatureMaps)
+
+   local jac = nn.Jacobian
+   local crelu = nn.CReLU()
+
+   --test gradients w.r.t input
+   local input = torch.Tensor(2, 3, 20, 20):uniform()
+   local err = jac.testJacobian(crelu,input)
+   mytester:assertlt(err,1e-5, "error computing gradients w.r.t. inputs")
+   --I/O
+   local fwdErr,bkwdErr = jac.testIO(crelu,input)
+   mytester:asserteq(fwdErr, 0, torch.typename(crelu) .. " - i/o forward err ")
+   mytester:asserteq(bkwdErr, 0, torch.typename(crelu) .. " - i/o backward err ")
+
+   --non-batched
+   input = torch.Tensor(3, 20, 20):uniform()
+   err = jac.testJacobian(crelu,input)
+   mytester:assertlt(err,1e-5, "error computing gradients w.r.t. inputs")
+   --I/O
+   local fwdErr,bkwdErr = jac.testIO(crelu,input)
+   mytester:asserteq(fwdErr, 0, torch.typename(crelu) .. " - i/o forward err ")
+   mytester:asserteq(bkwdErr, 0, torch.typename(crelu) .. " - i/o backward err ")
+end
+
 function nntest.Exp()
    local ini = math.random(3,5)
    local inj = math.random(3,5)
