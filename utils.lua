@@ -215,4 +215,65 @@ function nn.utils.clear(self, ...)
    return self
 end
 
+-- Crops the input image `input` from the center by size `cropSize`
+-- @param input a 3D or 4D Tensor
+-- @param a 2 element torch.LongTensor or table containing the size to crop from the
+--        center of `input` along the last 2 dimensions
+-- @returns a tensor of size `cropSize` which is the a view of the central `cropSize` of `input`
+-- Note: the returned tensor shares the same underlying storage as `input`
+function nn.utils.centerCrop(input, cropSize)
+   assert(input:dim() == 3 or input:dim() == 4, "input should be a 3D or  4D tensor")
+   assert(#cropSize == 2, "cropSize should have two elements only")
+   local _input = input
+   if input:dim() == 3 then
+      _input = input:view(1, input:size(1), input:size(2), input:size(3))
+   end
+   assert(cropSize[1] > 0 and cropSize[1] <= _input:size(3),
+         "0 < cropSize[1] <= input:size(3) not satisfied")
+   assert(cropSize[2] > 0 and cropSize[2] <= _input:size(4),
+        "0 < cropSize[1] <= input:size(3) not satisfied")
+
+   local inputHeight = _input:size(3)
+   local inputWidth = _input:size(4)
+
+   local rowStart = 1 + math.floor((inputHeight - cropSize[1])/2.0)
+   local rowEnd = rowStart + cropSize[1] - 1
+   local colStart = 1 +  math.floor((inputWidth - cropSize[2])/2.0)
+   local colEnd = colStart + cropSize[2] - 1
+   if input:dim() == 3 then
+      return input[{{}, {rowStart, rowEnd}, {colStart, colEnd}}]
+   else
+      return input[{{}, {}, {rowStart, rowEnd}, {colStart, colEnd}}]
+   end
+end
+
+
+-- Crops the larger image from the center by the size of the smaller tensor.
+-- @param t1 a 4D Tensor of shape [B,C,H,W]
+-- @param t2 a 4D Tensor of shape [B,C,H,W]
+-- @returns t1_crop, t2_crop - a view on each input tensor, center-cropped to the size of the smaller one
+-- Note: the returned tensors shares the same underlying storage as the inputs
+function nn.utils.autoCrop(t1, t2)
+   assert(t1:dim() == 4 or t1:dim() == 3, "inputs should be a 3D or 4D tensors")
+   assert(t1:dim() == t2:dim(), "inputs should have the same number of dimensions")
+   local _t1 = t1
+   local _t2 = t2
+   if t1:dim() == 3 then
+      _t1 = t1:view(1, t1:size(1), t1:size(2), t1:size(3))
+      _t2 = t2:view(1, t2:size(1), t2:size(2), t2:size(3))
+   end
+   assert(_t1:size(1) == _t2:size(1), "inputs should have the same batch size")
+   assert(_t1:size(2) == _t2:size(2), "inputs should have the same number of channels")
+   assert((_t1:size(3) <= _t2:size(3) and _t1:size(4) <= _t2:size(4)) or
+          (_t2:size(3) <= _t1:size(3) and _t2:size(4) <= _t1:size(4)),
+          "One input must be smaller than or equal in size of the other")
+
+   if (_t1:size(3) <= _t2:size(3) and _t1:size(4) <= _t2:size(4)) then
+      return t1, nn.utils.centerCrop(t2, {_t1:size(3), _t1:size(4)})
+   else
+      return nn.utils.centerCrop(t1, {_t2:size(3), _t2:size(4)}), t2
+   end
+end
+
+
 table.unpack = table.unpack or unpack

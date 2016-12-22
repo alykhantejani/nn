@@ -7167,6 +7167,553 @@ function nntest.Typecast()
   end
 end
 
+--Tests for nn.utils.centerCrop
+function nntest.centerCrop()
+   local function testCenterCropReturnsSameSizeAsCropSize()
+      local batches = math.random(1, 5)
+      local channels = math.random(1, 5)
+      local height = math.random(1, 10)
+      local width = math.random(1, 10)
+
+      --Batched
+      local input = torch.Tensor(batches, channels, height, width):uniform()
+      local cropSize = torch.LongStorage({math.random(1,height), math.random(1,width)})
+      local out = nn.utils.centerCrop(input, cropSize)
+      local expectedSize = torch.Tensor(batches, channels, cropSize[1], cropSize[2])
+      mytester:assert(out:isSameSizeAs(expectedSize), "output should have same size as cropSize")
+
+      --Non-Batched
+      input = torch.Tensor(channels, height, width):uniform()
+      out = nn.utils.centerCrop(input, cropSize)
+      expectedSize = torch.Tensor(channels, cropSize[1], cropSize[2])
+      mytester:assert(out:isSameSizeAs(expectedSize), "output should have same size as cropSize")
+   end
+
+   local function testCenterCropOnNonSquareInput()
+      local batches = math.random(1, 5)
+      local channels = math.random(1, 5)
+
+      --ODDxEven image
+      --Extract central 2x2
+      input = torch.Tensor(batches, channels, 5, 4):uniform()
+      local size = torch.LongStorage({2, 2})
+      local expectedResponse = input[{{}, {}, {2,3}, {2,3}}]
+      local out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract Central 1x1
+      size = torch.LongStorage({1,1})
+      expectedResponse = input[{{}, {}, {3}, {2}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {}, {2,4}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {}, {2,3}, {1,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({5,4})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+
+      --EvenxODD image
+      input = torch.Tensor(batches, channels, 4, 5):uniform()
+      size = torch.LongStorage({2, 2})
+      expectedResponse = input[{{}, {}, {2,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {}, {1,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {}, {2,3}, {2,4}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({4,5})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+   end
+
+   local function testCenterCropOnNonSquareInputNonBatched()
+      local channels = math.random(1, 5)
+
+      --ODDxEven image
+      --Extract central 2x2
+      input = torch.Tensor(channels, 5, 4):uniform()
+      local size = torch.LongStorage({2, 2})
+      local expectedResponse = input[{{}, {2,3}, {2,3}}]
+      local out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract Central 1x1
+      size = torch.LongStorage({1,1})
+      expectedResponse = input[{{}, {3}, {2}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {2,4}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {2,3}, {1,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({5,4})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+
+      --EvenxODD image
+      input = torch.Tensor(channels, 4, 5):uniform()
+      size = torch.LongStorage({2, 2})
+      expectedResponse = input[{{}, {2,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {1,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {2,3}, {2,4}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({4,5})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+   end
+
+   local function testCenterCropOnSquareInputBatched()
+      --Test edge case of 1x1
+      local batches = math.random(1, 5)
+      local channels = math.random(1, 5)
+      local input = torch.Tensor(batches, channels,1,1):uniform()
+      local size = torch.LongStorage({1,1})
+      local out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "1x1 crop on nx1x1 input should return input")
+
+      --Odd length
+      --Extrace Central 2x2
+      input = torch.Tensor(batches, channels, 5, 5):uniform()
+      size = torch.LongStorage({2, 2})
+      local expectedResponse = input[{{}, {}, {2,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract Central 1x1
+      size = torch.LongStorage({1,1})
+      expectedResponse = input[{{}, {}, {3}, {3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {}, {2,4}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {}, {2,3}, {2,4}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({5,5})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+
+      --Even length
+      --Extrace Central 2x2
+      input = torch.Tensor(batches, channels, 4, 4):uniform()
+      size = torch.LongStorage({2, 2})
+      expectedResponse = input[{{}, {}, {2,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract Central 1x1
+      size = torch.LongStorage({1,1})
+      expectedResponse = input[{{}, {}, {2}, {2}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {}, {1,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {}, {2,3}, {1,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({4,4})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+   end
+
+   local function testCenterCropOnSquareInputNonBatched()
+      --Test edge case of 1x1
+      local channels = math.random(1, 5)
+      local input = torch.Tensor(channels,1,1):uniform()
+      local size = torch.LongStorage({1,1})
+      local out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "1x1 crop on nx1x1 input should return input")
+
+      --Odd length
+      --Extract Central 2x2
+      input = torch.Tensor(channels, 5, 5):uniform()
+      size = torch.LongStorage({2, 2})
+      local expectedResponse = input[{{}, {2,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract Central 1x1
+      size = torch.LongStorage({1,1})
+      expectedResponse = input[{{}, {3}, {3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {2,4}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {2,3}, {2,4}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({5,5})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+
+      --Even length
+      --Extrace Central 2x2
+      input = torch.Tensor(channels, 4, 4):uniform()
+      size = torch.LongStorage({2, 2})
+      expectedResponse = input[{{}, {2,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract Central 1x1
+      size = torch.LongStorage({1,1})
+      expectedResponse = input[{{}, {2}, {2}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 3x2
+      size = torch.LongStorage({3, 2})
+      expectedResponse = input[{{}, {1,3}, {2,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      --Extract central 2x3
+      size = torch.LongStorage({2, 3})
+      expectedResponse = input[{{}, {2,3}, {1,3}}]
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, expectedResponse)
+
+      size = torch.LongStorage({4,4})
+      out = nn.utils.centerCrop(input, size)
+      mytester:assertTensorEq(out, input, "out should == input when cropSize is same as input size")
+   end
+
+   function testCenterCropDoesNotAllocateNewMemory()
+      --Test returns view on input not new tensor
+      local height = math.random(2, 10)
+      local width = math.random(2, 10)
+      local input = torch.Tensor(1, 1, height, width)
+      local size = torch.LongStorage({height -1, width -1})
+      local result = nn.utils.centerCrop(input, size)
+      mytester:assert(result:storage():cdata() == input:storage():cdata(),
+                    "Crop and input should share same underlying storage")
+
+      --non-batched
+      input = torch.Tensor(1, height, width)
+      result = nn.utils.centerCrop(input, size)
+      mytester:assert(result:storage():cdata() == input:storage():cdata(),
+                    "Crop and input should share same underlying storage")
+   end
+
+   testCenterCropOnSquareInputBatched()
+   testCenterCropOnSquareInputNonBatched()
+   testCenterCropOnNonSquareInputNonBatched()
+   testCenterCropOnNonSquareInput()
+   testCenterCropReturnsSameSizeAsCropSize()
+   testCenterCropDoesNotAllocateNewMemory()
+end
+
+
+function nntest.autoCrop()
+   local function testInputSizes()
+      --Test non-matching batch sizes
+      t1 = torch.Tensor(3, 1, 2, 4)
+      t2 = torch.Tensor(2, 1, 2, 4)
+      mytester:assertError(function() nn.utils.autoCrop(t1,t2) end, "inputs should have the same batch size")
+      mytester:assertError(function() nn.utils.autoCrop(t2,t1) end, "inputs should have the same batch size")
+
+      --Test non-matching channels
+      t1 = torch.Tensor(1, 1, 2, 4)
+      t2 = torch.Tensor(1, 2, 2, 4)
+      mytester:assertError(function() nn.utils.autoCrop(t1,t2) end,
+                         "inputs should have the same number of channels")
+      mytester:assertError(function() nn.utils.autoCrop(t2,t1) end,
+                         "inputs should have the same number of channels")
+
+      --one image must be smaller than or equal in size of the other
+      t1 = torch.Tensor(1, 2, 5, 5)
+      t2 = torch.Tensor(1, 2, 6, 3)
+      mytester:assertError(function() nn.utils.autoCrop(t1,t2) end,
+                         "One input must be smaller than or equal in size of the other")
+
+      mytester:assertError(function() nn.utils.autoCrop(t2,t1) end,
+                         "One input must be smaller than or equal in size of the other")
+
+      t1 = torch.Tensor(2, 5, 5)
+      t2 = torch.Tensor(2, 3, 6)
+      mytester:assertError(function() nn.utils.autoCrop(t1,t2) end,
+                       "One input must be smaller than or equal in size of the other")
+      mytester:assertError(function() nn.utils.autoCrop(t2,t1) end,
+                       "One input must be smaller than or equal in size of the other")
+   end
+
+
+   local function testAutoCropDoesNotAllocateMemory()
+      local batchSize = math.random(1, 10)
+      local channels = math.random(1,10)
+      local height1 = math.random(1,20)
+      local width1 = math.random(1,20)
+      local height2 = math.random(1, height1)
+      local width2 = math.random(1, width1)
+
+      local t1 = torch.Tensor(batchSize, channels, height1, width1):uniform()
+      local t2 = torch.Tensor(batchSize, channels, height2, width2):uniform()
+
+      local t1_crop, t2_crop = nn.utils.autoCrop(t1, t2)
+
+      mytester:assert(t1_crop:storage():cdata() == t1:storage():cdata(),
+                    "returned crop should have same storage as input")
+      mytester:assert(t2_crop:storage():cdata() == t2:storage():cdata(),
+                   "returned crop should have same storage as input")
+
+   end
+
+   local function testAutoCropIsSymetrical(t1, t2)
+      local t1_1, t2_1 = nn.utils.autoCrop(t1, t2)
+      local t2_2, t1_2 = nn.utils.autoCrop(t2, t1)
+      mytester:assertTensorEq(t1_1, t1_2, 1e-7, "autocrop(t1,t2) should equal autocrop(t2,t1)")
+      mytester:assertTensorEq(t2_1, t2_2, 1e-7, "autocrop(t1,t2) should equal autocrop(t2,t1)")
+   end
+
+   local function testAutoCropVsCenterCropBatched(t1, t2)
+      local t1_ac = nn.utils.autoCrop(t1, t2)
+      local cropSize = torch.LongStorage({t2:size(3), t2:size(4)})
+      local t1_cc = nn.utils.centerCrop(t1, cropSize)
+      mytester:assertTensorEq(t1_ac, t1_cc, "autocrop(t1,t2) should equal centerCrop(t1, t2:size())")
+   end
+
+   local function testAutoCropVsCenterCropNonBatched(t1, t2)
+      local t1_ac = nn.utils.autoCrop(t1, t2)
+      local cropSize = torch.LongStorage({t2:size(2), t2:size(3)})
+      local t1_cc = nn.utils.centerCrop(t1, cropSize)
+      mytester:assertTensorEq(t1_ac, t1_cc, "autocrop(t1,t2) should equal centerCrop(t1, t2:size())")
+   end
+
+   local function testAutoCropBatched()
+      local batchSize = math.random(1, 10)
+      local channels = math.random(1,10)
+      local height = math.random(1,20)
+      local width = math.random(1,20)
+
+      local t1 = torch.Tensor(batchSize, channels, height, width):uniform()
+      local t2 = torch.Tensor(batchSize, channels, height, width):uniform()
+      local t1_crop, t2_crop = nn.utils.autoCrop(t1, t2)
+      mytester:assertTensorEq(t1, t1_crop, 0, "autocrop(t1,t2) should equal t1,t2 if they are the same size")
+      mytester:assertTensorEq(t2, t2_crop, 0, "autocrop(t1,t2) should equal t1,t2 if they are the same size")
+
+      --Test 1x1 input
+      t2 = torch.Tensor(batchSize, channels, 1, 1):uniform()
+      testAutoCropIsSymetrical(t1, t2)
+      testAutoCropVsCenterCropBatched(t1, t2)
+
+      local iterations = math.random(1,5)
+      for i = 1, iterations do
+         batchSize = math.random(1, 10)
+         channels = math.random(1,10)
+         local height1 = math.random(1,20)
+         local width1 = math.random(1,20)
+         local height2 = math.random(1, height1)
+         local width2 = math.random(1, width1)
+
+         t1 = torch.Tensor(batchSize, channels, height1, width1):uniform()
+         t2 = torch.Tensor(batchSize, channels, height2, width2):uniform()
+         testAutoCropIsSymetrical(t1, t2)
+         testAutoCropVsCenterCropBatched(t1, t2)
+      end
+   end
+
+   function testAutoCropNonBatched()
+      local channels = math.random(1,10)
+      local height = math.random(1,20)
+      local width = math.random(1,20)
+
+      local t1 = torch.Tensor(channels, height, width):uniform()
+      local t2 = torch.Tensor(channels, height, width):uniform()
+      local t1_crop, t2_crop = nn.utils.autoCrop(t1, t2)
+      mytester:assertTensorEq(t1, t1_crop, 0, "autocrop(t1,t2) should equal t1,t2 if they are the same size")
+      mytester:assertTensorEq(t2, t2_crop, 0, "autocrop(t1,t2) should equal t1,t2 if they are the same size")
+
+      --Test 1x1 input
+      t2 = torch.Tensor(channels, 1, 1):uniform()
+      testAutoCropIsSymetrical(t1, t2)
+      testAutoCropVsCenterCropNonBatched(t1, t2)
+
+      local iterations = math.random(1,5)
+      for i = 1, iterations do
+         channels = math.random(1,10)
+         local height1 = math.random(1,20)
+         local width1 = math.random(1,20)
+         local height2 = math.random(1, height1)
+         local width2 = math.random(1, width1)
+
+         t1 = torch.Tensor(channels, height1, width1):uniform()
+         t2 = torch.Tensor(channels, height2, width2):uniform()
+         testAutoCropIsSymetrical(t1, t2)
+         testAutoCropVsCenterCropNonBatched(t1, t2)
+      end
+   end
+
+   testInputSizes()
+   testAutoCropDoesNotAllocateMemory()
+   testAutoCropBatched()
+   testAutoCropNonBatched()
+end
+
+function nntest.SpatialAutoCropMSECriterion()
+   -- Tests the assumptions on input and target dimensions for the
+   -- nn.SpatialAutoCropMSECriterion criterion
+   local function testInputBounds()
+      for _, average in pairs({true, false}) do
+         local sMSE = nn.SpatialAutoCropMSECriterion(average)
+
+         input = torch.Tensor(3, 3, 3)
+         target = torch.Tensor(4, 3, 3)
+         mytester:assertError(function() sMSE:forward(input, target) end,
+                          "Target and input must have same number of channels")
+
+         input = torch.Tensor(2, 4, 3, 3)
+         target = torch.Tensor(2, 3, 3, 3)
+         mytester:assertError(function() sMSE:forward(input, target) end,
+                        "Target and input must have same number of channels")
+
+         input = torch.Tensor(2, 3, 3, 3)
+         target = torch.Tensor(1, 3, 3, 3)
+         mytester:assertError(function() sMSE:forward(input, target) end,
+                         "Target and input must have same batch size")
+
+         input = torch.Tensor(2, 5, 5)
+         target = torch.Tensor(2, 5, 4)
+         mytester:assertError(function() sMSE:forward(input, target) end,
+                         "input resolution must be smaller or equal to the spatial resolution of the target")
+
+         input = torch.Tensor(1, 2, 5, 5)
+         target = torch.Tensor(1, 2, 4, 5)
+         mytester:assertError(function() sMSE:forward(input, target) end,
+                         "input resolution must be smaller or equal to the spatial resolution of the target")
+      end
+   end
+
+   -- Tests that the forward pass of nn.SpatialAutoCropMSECriterion
+   -- is equivalent to the forward pass of nn.MSECriterion with a pre-cropped target
+   function testSpatialAutoCropMSECriterionBatched()
+      for _, average in pairs({true, false}) do
+         local sMSE = nn.SpatialAutoCropMSECriterion(average)
+         local MSE = nn.MSECriterion(average)
+
+         local batchSize = math.random(1,10)
+         local channels = math.random(1,10)
+         local inputHeight = math.random(1, 50)
+         local inputWidth = math.random(1, 50)
+         local targetHeight = inputHeight + math.random(0,5)
+         local targetWidth = inputWidth + math.random(0,5)
+
+         local input = torch.Tensor(batchSize, channels, inputHeight, inputWidth):uniform()
+         local target = torch.Tensor(batchSize, channels, targetHeight, targetWidth):uniform()
+
+         --Crop the target to the size of the input
+         local cropSize = torch.LongStorage({input:size(3), input:size(4)})
+         local croppedTarget = nn.utils.centerCrop(target, cropSize)
+
+         local sMSEOut = nn.SpatialAutoCropMSECriterion(average):forward(input, target)
+         local MSEOut = MSE:forward(input, croppedTarget)
+         mytester:asserteq(sMSEOut, MSEOut)
+
+         local sMSEGradInput = sMSE:backward(input, target)
+         local MSEGradInput = MSE:backward(input, croppedTarget)
+         mytester:assertTensorEq(sMSEGradInput, MSEGradInput, 1e-7)
+         criterionJacobianTest(sMSE, input, target)
+      end
+   end
+
+   function testSpatialAutoCropMSECriterionNonBatched()
+      for _, average in pairs({true, false}) do
+         local sMSE = nn.SpatialAutoCropMSECriterion(average)
+         local MSE = nn.MSECriterion(average)
+
+         local channels = math.random(1,10)
+         local inputHeight = math.random(1, 50)
+         local inputWidth = math.random(1, 50)
+         local targetHeight = inputHeight + math.random(0,5)
+         local targetWidth = inputWidth + math.random(0,5)
+
+         local input = torch.Tensor(channels, inputHeight, inputWidth):uniform()
+         local target = torch.Tensor(channels, targetHeight, targetWidth):uniform()
+
+         --Crop the target to the size of the input
+         local cropSize = torch.LongStorage({input:size(2), input:size(3)})
+         local croppedTarget = nn.utils.centerCrop(target, cropSize)
+
+         local sMSEOut = nn.SpatialAutoCropMSECriterion(average):forward(input, target)
+         local MSEOut = MSE:forward(input, croppedTarget)
+         mytester:asserteq(sMSEOut, MSEOut)
+
+         local sMSEGradInput = sMSE:backward(input, target)
+         local MSEGradInput = MSE:backward(input, croppedTarget)
+         mytester:assertTensorEq(sMSEGradInput, MSEGradInput, 1e-7)
+         criterionJacobianTest(sMSE, input, target)
+      end
+   end
+
+   testInputBounds()
+   testSpatialAutoCropMSECriterionBatched()
+   testSpatialAutoCropMSECriterionNonBatched()
+end
+
 function nntest.Module_apply()
   local s = nn.Sequential()
   s:add(nn.Linear(10,10))
